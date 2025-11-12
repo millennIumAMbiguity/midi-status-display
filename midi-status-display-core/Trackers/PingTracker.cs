@@ -17,11 +17,14 @@ public class PingTracker : ITracker
 	
 	public async Task PingAsync(Tracker tracker)
 	{
+		int taskId = -1;
 		foreach (var item in tracker.Items)
 		{
 			try
 			{
-				var a = await _httpClient.GetAsync(item.StatKey);
+				var task = _httpClient.GetAsync(item.StatKey);
+				taskId = task.Id;
+				var a = await task;
 				LogDebug(item.StatKey!, a);
 				item.Size = a.IsSuccessStatusCode ? 1 : 0;
 			}
@@ -43,6 +46,12 @@ public class PingTracker : ITracker
 			{
 				if (HandleSocketException(item, se)) throw;
 			}
+			// expected error: The request was canceled due to the configured HttpClient.
+			catch (TaskCanceledException e) when (e.InnerException is TimeoutException)
+			{
+				//_log.Debug($"Ping {item.StatKey} - Failed: {e.Message}");
+				item.Size = 0;
+			}
 		}
 	}
 
@@ -63,6 +72,7 @@ public class PingTracker : ITracker
 				item.Size = 0;
 				break;
 			default:
+				_log.Error("SocketException code: " + e.ErrorCode);
 				return true;
 		}
 
